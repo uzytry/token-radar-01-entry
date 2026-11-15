@@ -1,8 +1,9 @@
 // Token Radar's dashboard. It reads window.RADAR (written beside dashboard/ by main.ts) and renders
 // the ranked board, a filterable and sortable table, a per-protocol detail drawer with the model's own
-// inputs and the protocol's farm plan, and a model sandbox that re-ranks the board live. No network:
-// every byte it shows is in data.js, and the page recomputes every implied value from the snapshot
-// figures with impliedOf(), the same arithmetic lib/model.ts runs, so the page and board.json agree.
+// inputs and the protocol's farm plan, a category breakdown, and a model sandbox that re-ranks the
+// board live. No network: every byte it shows is in data.js, and the page recomputes every implied
+// value from the snapshot figures with impliedOf(), the same arithmetic lib/model.ts runs, so the
+// page and board.json agree.
 (function () {
   'use strict';
 
@@ -15,7 +16,7 @@
   var state = {
     q: '', category: 'all', chain: 'all', tab: 'pre-token', sort: 'implied', dir: -1,
     selected: null, watchlistOnly: false, sandboxOpen: false,
-    sandbox: { base_multiple: DEFAULTS.base_multiple, growth_weight: DEFAULTS.growth_weight, maturity_floor: DEFAULTS.maturity_floor }
+    sandbox: { base_multiple: DEFAULTS.base_multiple, growth_weight: DEFAULTS.growth_weight, maturity_floor: DEFAULTS.maturity_floor, leadership_bonus: DEFAULTS.leadership_bonus }
   };
 
   var usd0 = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
@@ -40,17 +41,23 @@
     return Math.max(0, Math.round(days)) + 'd';
   }
   function fmtMult(n) { return 'x' + n.toFixed(2); }
+  function fmtShare(n) {
+    if (n === null || n === undefined || !isFinite(n)) return 'n/a';
+    return (n * 100).toFixed(1) + '%';
+  }
 
   // The model in one function: impliedOf() recomputes a row from the snapshot figures (TVL, seven-day
-  // growth, age with no token, chain count) under the given constants — the same arithmetic as
-  // impliedValue() in lib/model.ts. The detail view checks its answer against board.json's number.
+  // growth, age with no token, chain count, category leadership) under the given constants — the same
+  // arithmetic as impliedValue() in lib/model.ts. The detail view checks its answer against
+  // board.json's number.
   function impliedOf(row, model) {
     var growth = Math.min(model.growth_cap, Math.max(model.growth_floor, row.change_7d === null || row.change_7d === undefined ? 0 : row.change_7d));
     var growthMult = 1 + (growth / 100) * model.growth_weight;
     var age = row.age_days === null || row.age_days === undefined ? model.unknown_age_days : row.age_days;
     var maturity = model.maturity_floor + (Math.min(Math.max(age, 0), model.maturity_days) / model.maturity_days) * model.maturity_range;
     var breadth = 1 + model.breadth_per_chain * Math.min((row.chains || []).length, model.breadth_max_chains);
-    return Math.max(1, Math.round(row.tvl_usd * model.base_multiple * growthMult * maturity * breadth));
+    var leader = row.is_category_leader ? model.leadership_bonus : 1;
+    return Math.max(1, Math.round(row.tvl_usd * model.base_multiple * growthMult * maturity * breadth * leader));
   }
 
   // The sandbox's constants as a full model object, or the shipped model when the sandbox is at rest.
@@ -58,7 +65,8 @@
     var s = state.sandbox;
     return Math.abs(s.base_multiple - DEFAULTS.base_multiple) > 0.0001 ||
       Math.abs(s.growth_weight - DEFAULTS.growth_weight) > 0.0001 ||
-      Math.abs(s.maturity_floor - DEFAULTS.maturity_floor) > 0.0001;
+      Math.abs(s.maturity_floor - DEFAULTS.maturity_floor) > 0.0001 ||
+      Math.abs(s.leadership_bonus - DEFAULTS.leadership_bonus) > 0.0001;
   }
   function activeModel() {
     if (!sandboxActive()) return DEFAULTS;
@@ -67,6 +75,7 @@
     m.base_multiple = state.sandbox.base_multiple;
     m.growth_weight = state.sandbox.growth_weight;
     m.maturity_floor = state.sandbox.maturity_floor;
+    m.leadership_bonus = state.sandbox.leadership_bonus;
     return m;
   }
 
@@ -125,6 +134,7 @@
     var bmRaw = params.get('bm'); var bm = bmRaw === null ? NaN : Number(bmRaw); if (isFinite(bm) && bm > 0) state.sandbox.base_multiple = bm;
     var gwRaw = params.get('gw'); var gw = gwRaw === null ? NaN : Number(gwRaw); if (isFinite(gw) && gw >= 0) state.sandbox.growth_weight = gw;
     var mfRaw = params.get('mf'); var mf = mfRaw === null ? NaN : Number(mfRaw); if (isFinite(mf) && mf > 0) state.sandbox.maturity_floor = mf;
+    var lbRaw = params.get('lb'); var lb = lbRaw === null ? NaN : Number(lbRaw); if (isFinite(lb) && lb >= 1) state.sandbox.leadership_bonus = lb;
   }
   function writeHash() {
     var params = new URLSearchParams();
@@ -141,6 +151,7 @@
       params.set('bm', String(state.sandbox.base_multiple));
       params.set('gw', String(state.sandbox.growth_weight));
       params.set('mf', String(state.sandbox.maturity_floor));
+      params.set('lb', String(state.sandbox.leadership_bonus));
     }
     var next = params.toString();
     var base = window.location.pathname + window.location.search;
@@ -202,8 +213,8 @@
           'The watchlist is the floor: every protocol with at least ',
           el('b', { text: fmtUsd(DATA.floor_usd) }),
           ' of TVL and no token on record. The early radar adds ',
-          el('b', { text: String(DATA.early_size) }),
-          ' pre-token protocols below that floor. Implied value is a model of the snapshot\u2019s own figures — TVL, seven-day growth, age with no token, chain breadth — never a price, and never a hardcoded list of names.'
+          el('b', { text: 'every rankable pre-token protocol below that floor — ' + DATA.early_size + ' finds, no top-N cut' }),
+          '. Implied value is a model of the snapshot\u2019s own figures — TVL, seven-day growth, age with no token, chain breadth, category leadership — never a price, and never a hardcoded list of names.'
         )
       ),
       el('div', { class: 'stats' },
@@ -278,6 +289,28 @@
     );
   }
 
+  // The model in one line, above the table: the formula and its five factors, so the board's first
+  // screen states how every number below it is made. The full factor cards sit in the model panel.
+  function modelStrip() {
+    var m = DEFAULTS;
+    return el('div', { class: 'model-strip' },
+      el('span', { class: 'formula-line' },
+        'implied = TVL ', el('span', { class: 'op', text: '×' }), ' ' + m.base_multiple + ' ',
+        el('span', { class: 'op', text: '×' }), ' growth ',
+        el('span', { class: 'op', text: '×' }), ' maturity ',
+        el('span', { class: 'op', text: '×' }), ' breadth ',
+        el('span', { class: 'op', text: '×' }), ' leadership'
+      ),
+      el('span', { class: 'factor-chips' },
+        el('span', { class: 'factor-chip' }, 'TVL ', el('b', { text: '× ' + m.base_multiple })),
+        el('span', { class: 'factor-chip' }, '7d ', el('b', { text: 'clamped ' + m.growth_floor + '%…+' + m.growth_cap + '%' })),
+        el('span', { class: 'factor-chip' }, 'Age ', el('b', { text: m.maturity_floor + ' → ' + (m.maturity_floor + m.maturity_range).toFixed(2) })),
+        el('span', { class: 'factor-chip' }, 'Chains ', el('b', { text: '+' + Math.round(m.breadth_per_chain * 100) + '% each, max ' + m.breadth_max_chains })),
+        el('span', { class: 'factor-chip' }, 'Category leader ', el('b', { text: '× ' + m.leadership_bonus }))
+      )
+    );
+  }
+
   function sandboxPanel() {
     var box = el('section', { id: 'sandbox', class: 'sandbox' });
     if (!state.sandboxOpen) { box.style.display = 'none'; return box; }
@@ -300,6 +333,7 @@
       state.sandbox.base_multiple = DEFAULTS.base_multiple;
       state.sandbox.growth_weight = DEFAULTS.growth_weight;
       state.sandbox.maturity_floor = DEFAULTS.maturity_floor;
+      state.sandbox.leadership_bonus = DEFAULTS.leadership_bonus;
       writeHash(); refresh();
     });
     box.appendChild(el('div', { class: 'sandbox-head' },
@@ -312,10 +346,11 @@
     box.appendChild(el('div', { class: 'sandbox-grid' },
       slider('sb-base', 'TVL multiple', 'Base value is TVL x this multiple. Shipped: ' + DEFAULTS.base_multiple + '.', 0.1, 0.5, 0.01, state.sandbox.base_multiple, 'base_multiple'),
       slider('sb-growth', 'Growth weight', 'How much seven-day momentum moves the value. Shipped: ' + DEFAULTS.growth_weight + '.', 0, 1, 0.05, state.sandbox.growth_weight, 'growth_weight'),
-      slider('sb-maturity', 'Maturity floor', 'The value a brand-new protocol keeps before age adds more. Shipped: ' + DEFAULTS.maturity_floor + '.', 0.3, 0.8, 0.05, state.sandbox.maturity_floor, 'maturity_floor')
+      slider('sb-maturity', 'Maturity floor', 'The value a brand-new protocol keeps before age adds more. Shipped: ' + DEFAULTS.maturity_floor + '.', 0.3, 0.8, 0.05, state.sandbox.maturity_floor, 'maturity_floor'),
+      slider('sb-leader', 'Leadership bonus', 'The premium for the largest protocol in its category on the board. Shipped: ' + DEFAULTS.leadership_bonus + '; 1.00 turns it off.', 1, 1.1, 0.01, state.sandbox.leadership_bonus, 'leadership_bonus')
     ));
     if (sandboxActive()) {
-      box.appendChild(el('p', { class: 'sandbox-note', text: 'Sandbox active: the ranks below are recomputed with TVL x ' + state.sandbox.base_multiple + ', growth weight ' + state.sandbox.growth_weight + ', maturity floor ' + state.sandbox.maturity_floor + '. board.json carries the shipped model.' }));
+      box.appendChild(el('p', { class: 'sandbox-note', text: 'Sandbox active: the ranks below are recomputed with TVL x ' + state.sandbox.base_multiple + ', growth weight ' + state.sandbox.growth_weight + ', maturity floor ' + state.sandbox.maturity_floor + ', leadership bonus ' + state.sandbox.leadership_bonus + '. board.json carries the shipped model.' }));
     }
     return box;
   }
@@ -433,6 +468,33 @@
     );
   }
 
+  // Where the board's implied value sits: the top eight categories by combined implied value, with
+  // their row counts. Computed from the board itself, so it moves with the sandbox like everything else.
+  function categoriesPanel() {
+    var byCat = {};
+    effectiveRows().forEach(function (r) {
+      var c = r.category || 'Other';
+      if (!byCat[c]) byCat[c] = { name: c, rows: 0, combined: 0 };
+      byCat[c].rows += 1;
+      byCat[c].combined += r.effective_implied;
+    });
+    var top = Object.keys(byCat).map(function (k) { return byCat[k]; })
+      .sort(function (a, b) { return b.combined - a.combined || (a.name < b.name ? -1 : 1); })
+      .slice(0, 8);
+    var max = top.length ? top[0].combined : 1;
+    return el('section', { class: 'panel categories' },
+      el('h2', { text: 'Where the value sits' }),
+      el('p', { text: 'Combined implied value by category, across the board. A category with one giant and a long tail reads differently from one spread across many mid-size protocols — the bars show which is which.' }),
+      el('div', { class: 'cat-rows' }, top.map(function (c) {
+        return el('div', { class: 'cat-row' },
+          el('span', { class: 'cat-name' }, c.name + ' ', el('span', { text: '(' + c.rows + ' rows)' })),
+          el('div', { class: 'cat-bar', 'aria-hidden': 'true' }, el('i', { style: 'width:' + Math.max(3, Math.round((c.combined / max) * 100)) + '%' })),
+          el('span', { class: 'cat-val', text: fmtUsd(c.combined) })
+        );
+      }))
+    );
+  }
+
   function modelPanel() {
     var m = DEFAULTS;
     return el('section', { class: 'panel model' },
@@ -448,13 +510,14 @@
         ' below, which recomputes each row in this page. No protocol name is special-cased, and no row is hand-picked: change the snapshot and the board changes with it.'
       ),
       el('div', { class: 'formula' },
-        'implied = round( tvl_usd ', el('span', { class: 'op', text: '×' }), ' ' + m.base_multiple + ' ', el('span', { class: 'op', text: '×' }), ' (1 + clamp(change_7d, ' + m.growth_floor + ', ' + m.growth_cap + ') / 100 ', el('span', { class: 'op', text: '×' }), ' ' + m.growth_weight + ') ', el('span', { class: 'op', text: '×' }), ' (' + m.maturity_floor + ' + min(age_days, ' + m.maturity_days + ') / ' + m.maturity_days + ' ', el('span', { class: 'op', text: '×' }), ' ' + m.maturity_range + ') ', el('span', { class: 'op', text: '×' }), ' (1 + ' + m.breadth_per_chain + ' ', el('span', { class: 'op', text: '×' }), ' min(chains, ' + m.breadth_max_chains + ')) )'
+        'implied = round( tvl_usd ', el('span', { class: 'op', text: '×' }), ' ' + m.base_multiple + ' ', el('span', { class: 'op', text: '×' }), ' (1 + clamp(change_7d, ' + m.growth_floor + ', ' + m.growth_cap + ') / 100 ', el('span', { class: 'op', text: '×' }), ' ' + m.growth_weight + ') ', el('span', { class: 'op', text: '×' }), ' (' + m.maturity_floor + ' + min(age_days, ' + m.maturity_days + ') / ' + m.maturity_days + ' ', el('span', { class: 'op', text: '×' }), ' ' + m.maturity_range + ') ', el('span', { class: 'op', text: '×' }), ' (1 + ' + m.breadth_per_chain + ' ', el('span', { class: 'op', text: '×' }), ' min(chains, ' + m.breadth_max_chains + ')) ', el('span', { class: 'op', text: '×' }), ' (category leader ? ' + m.leadership_bonus + ' : 1) )'
       ),
       el('div', { class: 'factors' },
         el('div', { class: 'factor' }, el('b', { text: 'TVL base' }), el('span', { class: 'val', text: 'TVL × ' + m.base_multiple }), el('span', { text: 'The size of the business a token would price. A quarter of TVL is the board\u2019s standing multiple.' })),
         el('div', { class: 'factor' }, el('b', { text: 'Growth momentum' }), el('span', { class: 'val', text: 'clamped ' + m.growth_floor + '%…+' + m.growth_cap + '%' }), el('span', { text: 'Seven-day TVL change, clamped so one viral week cannot crown a protocol, weighted ' + m.growth_weight + '.' })),
         el('div', { class: 'factor' }, el('b', { text: 'Age with no token' }), el('span', { class: 'val', text: m.maturity_floor + ' → ' + (m.maturity_floor + m.maturity_range).toFixed(2) }), el('span', { text: 'Days since first listing, capped at ' + m.maturity_days + '. The longer the record runs with no token, the more pent up the launch.' })),
-        el('div', { class: 'factor' }, el('b', { text: 'Chain breadth' }), el('span', { class: 'val', text: '+2% per chain, max 5' }), el('span', { text: 'How widely the protocol is already distributed. More chains, more wallets a launch can reach.' }))
+        el('div', { class: 'factor' }, el('b', { text: 'Chain breadth' }), el('span', { class: 'val', text: '+2% per chain, max 5' }), el('span', { text: 'How widely the protocol is already distributed. More chains, more wallets a launch can reach.' })),
+        el('div', { class: 'factor' }, el('b', { text: 'Category leadership' }), el('span', { class: 'val', text: '× ' + m.leadership_bonus + ' for the leader' }), el('span', { text: 'The largest protocol in its category on the board prices the category, so it carries a bounded 5% premium — never enough to override the fundamentals.' }))
       ),
       el('p', null,
         'Excluded from the early radar, by the watchlist\u2019s own rule: exchanges, bridges, liquid staking and restaking, versioned pools and anything named wrapped, staked or staking — products of a token that already trades are not launches still to come. The watchlist rows themselves are always kept. ',
@@ -478,6 +541,14 @@
     return { action: action, cost: cost, time: time };
   }
 
+  function fmtMinutes(m) {
+    if (m === null || m === undefined || !isFinite(m)) return 'n/a';
+    if (m < 60) return m + ' min';
+    var h = Math.floor(m / 60);
+    var rest = m % 60;
+    return rest ? h + 'h ' + rest + 'm' : h + 'h';
+  }
+
   function openDetail(slug) {
     var row = null;
     var eff = effectiveRows();
@@ -494,12 +565,16 @@
     var growthMult = 1 + (growth / 100) * model.growth_weight;
     var maturityMult = model.maturity_floor + (Math.min(Math.max(age, 0), model.maturity_days) / model.maturity_days) * model.maturity_range;
     var breadthMult = 1 + model.breadth_per_chain * Math.min((row.chains || []).length, model.breadth_max_chains);
+    var leaderMult = row.is_category_leader ? model.leadership_bonus : 1;
     var base = row.tvl_usd * model.base_multiple;
+    var afterGrowth = base * growthMult;
+    var afterMaturity = afterGrowth * maturityMult;
+    var afterBreadth = afterMaturity * breadthMult;
 
     dialog.textContent = '';
     dialog.appendChild(el('div', { class: 'detail-head' },
       el('div', null,
-        el('div', { class: 'kicker', text: 'Rank ' + row.effective_rank + ' of ' + DATA.board_size + (row.watchlist ? ' · Watchlist' : ' · Early find') }),
+        el('div', { class: 'kicker', text: 'Rank ' + row.effective_rank + ' of ' + DATA.board_size + (row.watchlist ? ' · Watchlist' : ' · Early find') + (row.is_category_leader ? ' · ★ Category leader' : '') }),
         el('h2', { id: 'detail-title', text: row.name }),
         el('p', { class: 'sub', text: (row.category || 'Other') + ' on ' + ((row.chains && row.chains.length) ? row.chains.join(', ') : 'an unnamed chain') })
       ),
@@ -514,9 +589,10 @@
       el('h3', { text: 'Value breakdown' }),
       el('div', { class: 'equation' },
         el('div', null, el('span', { text: 'TVL × ' + model.base_multiple }), el('b', { class: 'num', text: fmtUsdFull(Math.round(base)) })),
-        el('div', null, el('span', { text: '7d growth ' + fmtPct(row.change_7d) + ' → ' + fmtMult(growthMult) }), el('b', { class: 'num', text: fmtUsdFull(Math.round(base * growthMult)) })),
-        el('div', null, el('span', { text: 'Age ' + fmtAge(row.age_days) + ' → ' + fmtMult(maturityMult) }), el('b', { class: 'num', text: fmtUsdFull(Math.round(base * growthMult * maturityMult)) })),
-        el('div', null, el('span', { text: (row.chains || []).length + ' chain' + ((row.chains || []).length === 1 ? '' : 's') + ' → ' + fmtMult(breadthMult) }), el('b', { class: 'num', text: fmtUsdFull(Math.round(base * growthMult * maturityMult * breadthMult)) })),
+        el('div', null, el('span', { text: '7d growth ' + fmtPct(row.change_7d) + ' → ' + fmtMult(growthMult) }), el('b', { class: 'num', text: fmtUsdFull(Math.round(afterGrowth)) })),
+        el('div', null, el('span', { text: 'Age ' + fmtAge(row.age_days) + ' → ' + fmtMult(maturityMult) }), el('b', { class: 'num', text: fmtUsdFull(Math.round(afterMaturity)) })),
+        el('div', null, el('span', { text: (row.chains || []).length + ' chain' + ((row.chains || []).length === 1 ? '' : 's') + ' → ' + fmtMult(breadthMult) }), el('b', { class: 'num', text: fmtUsdFull(Math.round(afterBreadth)) })),
+        el('div', null, el('span', { text: (row.is_category_leader ? 'Category leader → ' : 'Not category leader → ') + fmtMult(leaderMult) }), el('b', { class: 'num', text: fmtUsdFull(Math.round(afterBreadth * leaderMult)) })),
         el('div', { class: 'total' }, el('span', { text: 'Implied value' }), el('b', { class: 'num', text: fmtUsdFull(shown) }))
       ),
       el('p', { class: 'note', text: 'Model ' + DATA.model_version + ': the same function scores every protocol. An estimate of what a token would be worth if the record stayed as it is — never a price, and no promise a token is issued.' })
@@ -529,11 +605,19 @@
         el('div', { class: 'figure' }, el('span', { text: 'Age with no token' }), el('b', { text: fmtAge(row.age_days) })),
         el('div', { class: 'figure' }, el('span', { text: 'First listed' }), el('b', { text: row.listed_at || 'unknown' })),
         el('div', { class: 'figure' }, el('span', { text: 'Token on record' }), el('b', { text: 'None recorded' })),
+        el('div', { class: 'figure' }, el('span', { text: 'Share of its category' }), el('b', { text: fmtShare(row.category_share) + (row.is_category_leader ? ' — leads it' : '') })),
         el('div', { class: 'figure wide' }, el('span', { text: 'Chains' }), el('b', { text: (row.chains || []).join(', ') || '—' }))
       )
     ));
+    var ft = row.farm_total || {};
     dialog.appendChild(el('section', { class: 'detail-section' },
       el('h3', { text: 'Farm plan — what to do, what it costs, how long it takes' }),
+      el('div', { class: 'farm-totals' },
+        el('div', { class: 'figure' }, el('span', { text: 'Capital' }), el('b', { text: '$' + (ft.capital_usd !== undefined ? ft.capital_usd : 'n/a') })),
+        el('div', { class: 'figure' }, el('span', { text: 'Gas, whole plan' }), el('b', { text: ft.gas_usd !== undefined ? '$' + ft.gas_usd.toFixed(2) : 'n/a' })),
+        el('div', { class: 'figure' }, el('span', { text: 'Active time' }), el('b', { text: fmtMinutes(ft.active_minutes) })),
+        el('div', { class: 'figure' }, el('span', { text: 'Hold' }), el('b', { text: ft.hold_days !== undefined ? ft.hold_days + ' days' : 'n/a' }))
+      ),
       el('ol', { class: 'steps' }, (row.farm_steps || []).map(function (s) {
         var p = parseStep(s);
         return el('li', null,
@@ -572,8 +656,10 @@
     shell.appendChild(controls());
     sandboxBox = el('div', { id: 'sandbox-box' });
     shell.appendChild(sandboxBox);
+    shell.appendChild(modelStrip());
     tableBox = el('div', { id: 'table-box' });
     shell.appendChild(tableBox);
+    shell.appendChild(categoriesPanel());
     shell.appendChild(modelPanel());
     shell.appendChild(footer());
     app.textContent = '';
@@ -622,6 +708,7 @@
     state.sandbox.base_multiple = DEFAULTS.base_multiple;
     state.sandbox.growth_weight = DEFAULTS.growth_weight;
     state.sandbox.maturity_floor = DEFAULTS.maturity_floor;
+    state.sandbox.leadership_bonus = DEFAULTS.leadership_bonus;
     readHash();
     var q = document.getElementById('q'); if (q) q.value = state.q;
     var c = document.getElementById('category'); if (c) c.value = state.category;

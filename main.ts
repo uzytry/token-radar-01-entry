@@ -1,16 +1,17 @@
-// Token Radar (radar-2): a program that turns the sealed protocol snapshot into a ranked board and
+// Token Radar (radar-3): a program that turns the sealed protocol snapshot into a ranked board and
 // the dashboard that shows it. Node 22, standard library only, no network.
 //
 //   input   /input/snapshot.json, or --input <snapshot.json|directory>
 //   output  /output, or --output <dir>, or MAKEFUN_OUTPUT_DIR
 //
-// It scores every watchlist protocol and the early radar below the floor with the model in
-// lib/model.ts, writes the ranked board to board.json and the dashboard's dataset to data.js, copies
-// this repository's dashboard/ and screenshots/ into the output, and writes dossier.json last with
-// the vendored make.fun library, so the dossier is the one the scorer rebuilds from the same files.
+// It scores every watchlist protocol and the whole rankable early radar below the floor with the
+// model in lib/model.ts, writes the ranked board to board.json and the dashboard's dataset to
+// data.js, copies this repository's dashboard/ and screenshots/ into the output, and writes
+// dossier.json last with the vendored make.fun library, so the dossier is the one the scorer
+// rebuilds from the same files.
 //
 // Local run:
-//   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts --input ../input/snapshot.json
+//   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts --input ../token-radar-01-kit/token-radar-01-kit/input/snapshot.json
 
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
