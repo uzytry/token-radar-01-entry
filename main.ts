@@ -6,7 +6,9 @@
 // two runs on the same snapshot produce byte-identical output.
 //
 // Usage (from the repository root):
-//   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts --input <snapshot.json>
+//   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts --input <snapshot.json|directory>
+// Without --input, reads the sealed snapshot from $MAKEFUN_INPUT_DIR or /input
+// (the grader mounts it there as /input/snapshot.json).
 
 import { readFileSync, writeFileSync, mkdirSync, cpSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -71,7 +73,12 @@ function validateBoard(board: ReturnType<typeof buildBoard>, snapshot: Snapshot)
 }
 
 function main(): void {
-  const inputPath = argValue("--input") ?? join(ROOT, "input", "snapshot.json");
+  // Default input is the grader's sealed mount (/input, or $MAKEFUN_INPUT_DIR),
+  // which may be a snapshot file or a directory holding snapshot.json.
+  // v3 wrongly defaulted to <repo>/input/snapshot.json (does not exist), so a
+  // grader run without --input crashed with ENOENT and run_completes failed.
+  const inputArg = argValue("--input") ?? process.env.MAKEFUN_INPUT_DIR ?? "/input";
+  const inputPath = inputArg.endsWith(".json") ? inputArg : join(inputArg, "snapshot.json");
   const outDir = process.env.MAKEFUN_OUTPUT_DIR ?? "out";
 
   const snapshot = JSON.parse(readFileSync(inputPath, "utf-8")) as Snapshot;
