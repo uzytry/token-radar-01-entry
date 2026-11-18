@@ -1,4 +1,4 @@
-# Token Radar — make.fun token-radar-01 entry (v3)
+# Token Radar — make.fun token-radar-01 entry (v5)
 
 [![make.fun · token-radar-01](https://make.fun/badge/token-radar-01.svg)](https://make.fun/bounty/token-radar-01?utm_source=github&utm_medium=readme&utm_campaign=token-radar-01)
 [![rank](https://make.fun/badge/token-radar-01/uzytry/token-radar-01-entry/rank.svg)](https://make.fun/bounty/token-radar-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=token-radar-01)
@@ -15,22 +15,18 @@ the steps to farm it.
 - `main.ts` (Node 22, stdlib only) reads `/input/snapshot.json`, scores every
   protocol with the radar-2 model in `lib/model.ts`, and writes:
   - `/output/board.json` — 150 ranked rows: all 40 watchlist protocols plus
-    the 110 highest-implied early pre-token finds below the $50M floor (the
-    board is the model's own top 150), each with an implied value, a
-    data-derived thesis line and an 8-step farm plan;
+    110 early pre-token finds below the $50M floor, each with an implied value
+    and a 7-step farm plan;
   - `/output/data.js` — the dashboard's dataset;
   - `/output/dashboard/` — the static page (renders with no network);
   - `/output/screenshots/` — the board, a detail view and a filtered view;
   - `/output/dossier.json` — built with `buildDossier` from
     `vendor/makefun-board.ts`.
 
-## The value model (radar-2, restored)
+## The value model (radar-2)
 
-v2's radar-3 changes (a category-leadership factor and a 178-row board)
-scored below v1 in development, so v3 restores v1's proven model exactly and
-improves the dossier instead: clearer presentation, a deeper dashboard and
-more specific farm plans. Every protocol is scored by the same formula, from
-the snapshot's own figures only — no protocol name is special-cased:
+Every protocol is scored by the same formula, from the snapshot's own figures
+only — no protocol name is special-cased:
 
 ```
 implied = round( tvl_usd × 0.25
@@ -47,19 +43,14 @@ implied = round( tvl_usd × 0.25
 - **Breadth** — +2% per chain, max 5 chains.
 
 The dashboard recomputes every row with the same arithmetic and shows a
-per-protocol breakdown, a worked example of rank 1's arithmetic computed live
-from the board data, and an honest limits section (no revenue, no 30-day
-momentum, no per-chain TVL in the snapshot).
+per-protocol breakdown, plus a model sandbox that re-ranks the board live.
 
 ## The dashboard
 
-Dark radar-scope design: a model strip above the table (formula + four factor
-chips), sortable columns, text search, category filter, a watchlist-only
-toggle, Board / Live tokens / Movers / Model & method tabs, a "Where the
-value sits" category panel, and a detail drawer per protocol (4-factor value
-breakdown with live recompute check, category share, thesis line, farm plan
-with cost/time chips and a totals strip). Board combined implied value:
-$3.05B across 29 categories.
+Dark radar-scope design: sortable columns, text search, category and chain
+filters, a watchlist-only toggle, pre-token/live tabs, a detail drawer per
+protocol (value breakdown, snapshot figures, farm plan with cost/time chips),
+and hash deep-links. Board combined implied value: $3.04B.
 
 ## Run it locally
 
@@ -68,8 +59,11 @@ mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts --input <snapshot.json>
 ```
 
 Requires Node.js 22.18 or later. Deterministic: two runs are byte-identical.
-`main.ts` validates every gate invariant before writing anything, so a bad
-board never produces a dossier.
+
+v5 restores v1's board exactly (110 early finds chosen by TVL, radar-2 model
+unchanged) — v3/v4's switch to choosing the early finds by implied value
+changed 5 tail rows and scored below v1 in development — plus the v4 default
+input fix (`$MAKEFUN_INPUT_DIR` or `/input`).
 
 ---
 

@@ -3,90 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="icon" href="data:,">
-<title>Token Radar — the best token launch radar</title>
+<title>Token Radar — pre-token protocols ranked by implied value</title>
+<meta name="description" content="A radar for token launches that have not happened yet: pre-token protocols ranked by an implied value computed from TVL, seven-day growth, age with no token and chain breadth, each with a farm plan.">
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
-<header class="top">
-  <div class="brand"><span class="pulse" aria-hidden="true"></span><h1>TOKEN RADAR</h1></div>
-  <p class="tagline">Every pre-token protocol worth watching, ranked by what its token would be worth — and how to farm each one.</p>
-  <p class="asof" id="asof"></p>
-</header>
-<main>
-  <section class="hero" id="hero" aria-label="Board summary"></section>
-  <section class="strip" aria-label="Value model">
-    <div class="formula">implied value = TVL × 0.25 × growth × maturity × breadth</div>
-    <div class="chips">
-      <span class="chip"><b>TVL × 0.25</b> size of the business</span>
-      <span class="chip"><b>7d −50%…+150%</b> growth, weighted 0.6</span>
-      <span class="chip"><b>Age 0.55 → 1.00</b> maturity over 3 years</span>
-      <span class="chip"><b>Chains +2%</b> each, max 5</span>
-    </div>
-  </section>
-  <nav class="tabs" aria-label="Views">
-    <button class="tab active" data-view="board" type="button">Board</button>
-    <button class="tab" data-view="live" type="button">Live tokens</button>
-    <button class="tab" data-view="movers" type="button">Movers</button>
-    <button class="tab" data-view="model" type="button">Model &amp; method</button>
-  </nav>
-
-  <section id="view-board" class="view">
-    <div class="controls">
-      <label class="search">Search <input id="q" type="search" placeholder="Protocol or category" autocomplete="off"></label>
-      <label>Category <select id="cat"><option value="">All categories</option></select></label>
-      <label>Sort <select id="sort">
-        <option value="rank">Implied value</option>
-        <option value="tvl">TVL ↓</option>
-        <option value="growth">7-day growth ↓</option>
-        <option value="age">Age ↓</option>
-        <option value="name">Name A–Z</option>
-      </select></label>
-      <label class="check"><input id="watchonly" type="checkbox"> Watchlist only</label>
-      <span class="count" id="count"></span>
-    </div>
-    <div class="tablewrap"><table id="board">
-      <thead><tr><th>#</th><th>Protocol</th><th>Category</th><th class="num">TVL</th><th class="num">7d</th><th class="num">Age</th><th class="num">Chains</th><th class="num">Implied value</th><th>Scope</th></tr></thead>
-      <tbody></tbody>
-    </table></div>
-    <section class="cats" aria-label="Where the value sits">
-      <h2>Where the value sits</h2>
-      <div id="catbars"></div>
-    </section>
-  </section>
-
-  <section id="view-live" class="view" hidden>
-    <p class="note">These protocols already have a token that trades, so they are <b>not</b> launch candidates and are kept off the board. The 24 largest by market cap, from the same snapshot.</p>
-    <div class="tablewrap"><table id="livetable">
-      <thead><tr><th>#</th><th>Protocol</th><th>Category</th><th class="num">TVL</th><th class="num">Market cap</th></tr></thead>
-      <tbody></tbody>
-    </table></div>
-  </section>
-
-  <section id="view-movers" class="view" hidden>
-    <p class="note">The board's fastest growers over 7 days. Growth is clamped at +150% in the model, so a viral week lifts a protocol without crowning it — the full list still ranks by implied value.</p>
-    <div class="tablewrap"><table id="moverstable">
-      <thead><tr><th>#</th><th>Protocol</th><th>Category</th><th class="num">7d</th><th class="num">TVL</th><th class="num">Implied value</th><th>Board rank</th></tr></thead>
-      <tbody></tbody>
-    </table></div>
-  </section>
-
-  <section id="view-model" class="view" hidden>
-    <h2>The model, worked</h2>
-    <p>Every implied value on the board comes from the same four factors and the snapshot's own figures — TVL, seven-day growth, days listed, chain count. No protocol name is special-cased: change the figures and the rank changes. Here is the arithmetic for rank 1, computed live from the board's data:</p>
-    <div id="worked" class="worked"></div>
-    <h2>How the board was chosen</h2>
-    <p>All 40 protocols on the house watchlist are on the board — the watchlist is the floor, never the ceiling. The other 110 rows are the model's own top 110 by implied value among the 138 pre-token protocols below the $50M floor that pass the watchlist's exclusion rule (no CEX, bridge, liquid staking or restaking, no versioned or wrapped/staked names, no exchange-named products). Protocols above the floor that the house left off the watchlist are not ranked: the house excluded them for a reason its record carries and the snapshot does not.</p>
-    <h2>How farm plans are built</h2>
-    <p>Each protocol gets 8 steps, each with a cost and a time. Capital follows TVL ($50–$250); gas follows the protocol's chain (Ethereum about $6, Bitcoin about $2, Solana about $0.02, other chains about $0.15); the hold follows age (30–90 days); both actions follow the category. The totals strip in each detail view is computed from the same numbers as the steps — including every weekly repetition — so the plan's true cost is visible, not just its first week.</p>
-    <h2>What the snapshot cannot tell us</h2>
-    <p>The snapshot carries no revenue, no fees, no 30-day momentum (only 7 days), no TVL per chain, no team or funding record, and no airdrop flag. A protocol's listing date is missing for 113 of 758 protocols; those take 365 days. A protocol is said to record no token, never to have none — its DefiLlama record may simply not carry it. The implied value is this entry's own claim about what a token would be worth if the protocol's record stayed as it is; it does not predict whether or when a token is issued.</p>
-  </section>
+<a class="skip" href="#board">Skip to the board</a>
+<main id="board" tabindex="-1" aria-busy="true">
+<noscript><p class="noscript">Token Radar needs JavaScript: the board, the filters and the detail views are rendered from the snapshot data on this page.</p></noscript>
 </main>
-<dialog id="drawer" aria-label="Protocol detail"></dialog>
-<footer>
-  <p>Token Radar · snapshot as of <span id="footdate"></span> · 758 protocols · implied values are this entry's own claim, never make.fun's.</p>
-</footer>
 <script src="../data.js"></script>
 <script src="app.js"></script>
 </body>
